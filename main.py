@@ -7,7 +7,6 @@ Diese Datei startet die Anwendung und erstellt das Hauptfenster.
 
 # ── Imports ──────────────────────────────────────────────
 import sys
-import os  # für Dateinamen (z. B. "brief.html" aus dem vollständigen Pfad)
 from pathlib import Path  # für Dateipfade, z. B. zu den Design-Dateien
 
 from PySide6.QtCore import Qt  # Qt-Grundeinstellungen, z. B. Farbschema
@@ -21,6 +20,9 @@ from PySide6.QtWidgets import (
 # QAction = ein Menüeintrag, QKeySequence = Tastenkürzel wie Strg+S
 # QActionGroup = Gruppe von Menüeinträgen, von denen nur einer aktiv sein kann
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+
+# Eigenes Modul: Lesen und Schreiben von Dateien
+import file_service
 
 
 # ── Konstanten ───────────────────────────────────────────
@@ -38,12 +40,17 @@ THEMES = {
 # gleich aus und beachtet Stylesheets vollständig.
 QT_STYLE = "Fusion"
 
+# Filter für die Datei-Dialoge (Text im Dialog und erlaubte Endungen)
+FILE_FILTER_OPEN = "Tippsi-Dokumente (*.html);;Textdateien (*.txt);;Alle Dateien (*)"
+FILE_FILTER_SAVE = "Tippsi-Dokumente (*.html);;Textdateien (*.txt)"
+
 
 # ── Hauptfenster ─────────────────────────────────────────
 class TippsiWindow(QMainWindow):
     """Das Hauptfenster von Tippsi.
 
-    Erbt von QMainWindow und ergänzt Textfeld, Menüs und Dateifunktionen.
+    Zuständig für Anzeige und Bedienung. Das Lesen und Schreiben
+    von Dateien übernimmt das Modul file_service.
     """
 
     def __init__(self):
@@ -163,12 +170,7 @@ class TippsiWindow(QMainWindow):
     def open_file(self):
         """Öffnet eine vom Benutzer gewählte Datei und zeigt sie im Textfeld an."""
         # Rückgabe: (Pfad, gewählter Filter). Der Filter wird nicht benötigt -> _
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Datei öffnen",
-            "",
-            "Tippsi-Dokumente (*.html);;Textdateien (*.txt);;Alle Dateien (*)",
-        )
+        path, _ = QFileDialog.getOpenFileName(self, "Datei öffnen", "", FILE_FILTER_OPEN)
 
         # Leerer Pfad = Benutzer hat abgebrochen
         if not path:
@@ -176,15 +178,13 @@ class TippsiWindow(QMainWindow):
 
         # try/except verhindert einen Absturz, falls die Datei nicht lesbar ist
         try:
-            # UTF-8, damit Umlaute und Sonderzeichen korrekt gelesen werden
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
+            content = file_service.read_file(path)
         except OSError as error:
-            QMessageBox.warning(self, "Fehler", f"Die Datei konnte nicht geöffnet werden:\n{error}")
+            self.show_error("Die Datei konnte nicht geöffnet werden.", error)
             return
 
         # HTML inklusive Formatierung laden, andere Dateien als reinen Text
-        if path.lower().endswith(".html"):
+        if file_service.is_html(path):
             self.editor.setHtml(content)
         else:
             self.editor.setPlainText(content)
@@ -201,34 +201,26 @@ class TippsiWindow(QMainWindow):
 
     def save_file_as(self):
         """Fragt nach einem Speicherort und speichert das Dokument dort."""
-        path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Speichern unter",
-            "Unbenannt.html",
-            "Tippsi-Dokumente (*.html);;Textdateien (*.txt)",
-        )
+        default_name = "Unbenannt" + file_service.DEFAULT_EXTENSION
+        path, _ = QFileDialog.getSaveFileName(self, "Speichern unter", default_name, FILE_FILTER_SAVE)
         if not path:
             return
 
-        # Ohne Dateiendung wird standardmäßig .html verwendet
-        if not path.lower().endswith((".html", ".txt")):
-            path += ".html"
-
-        self.write_to_file(path)
+        # Ohne Dateiendung wird die Standardendung (.html) angehängt
+        self.write_to_file(file_service.ensure_extension(path))
 
     def write_to_file(self, path):
-        """Schreibt den Inhalt des Textfelds in die angegebene Datei."""
+        """Holt den Inhalt aus dem Textfeld und lässt ihn von file_service speichern."""
         # .html speichert mit Formatierung, .txt nur den reinen Text
-        if path.lower().endswith(".html"):
+        if file_service.is_html(path):
             content = self.editor.toHtml()
         else:
             content = self.editor.toPlainText()
 
         try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(content)
+            file_service.write_file(path, content)
         except OSError as error:
-            QMessageBox.warning(self, "Fehler", f"Die Datei konnte nicht gespeichert werden:\n{error}")
+            self.show_error("Die Datei konnte nicht gespeichert werden.", error)
             return
 
         self.current_file = path
@@ -236,13 +228,19 @@ class TippsiWindow(QMainWindow):
         # Hinweis in der Statusleiste, verschwindet nach 3 Sekunden
         self.statusBar().showMessage("Gespeichert", 3000)
 
+    # ── Hilfsmethoden ────────────────────────────────────
     def update_title(self):
         """Zeigt den Namen der aktuellen Datei in der Titelleiste an."""
         if self.current_file:
-            name = os.path.basename(self.current_file)
+            # Path(...).name macht aus "C:/.../brief.html" nur "brief.html"
+            name = Path(self.current_file).name
         else:
             name = "Unbenannt"
         self.setWindowTitle(f"{name} - Tippsi")
+
+    def show_error(self, message, error):
+        """Zeigt eine Fehlermeldung als Popup an."""
+        QMessageBox.warning(self, "Fehler", f"{message}\n\n{error}")
 
 
 # ── Programmstart ────────────────────────────────────────
