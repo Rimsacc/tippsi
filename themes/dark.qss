@@ -1,0 +1,59 @@
+/*
+ * Tippsi - dunkles Design (Qt Style Sheet)
+ *
+ * Farbpalette:
+ *   #241C27  Hintergrund (dunkles Aubergine)
+ *   #2F2433  Flächen (Textfeld, Menüs)
+ *   #3A2B3F  Menüleiste
+ *   #5A3F5E  Auswahl und Ränder
+ *   #FFB6C8  Akzent (Rosa)
+ *   #F5E6EC  Text (helles Rosaweiß)
+ *   #8A7A82  Text deaktiviert
+ */
+
+QMainWindow { background-color: #241C27; }
+
+/* ── Menüleiste oben ── */
+QMenuBar {
+    background-color: #3A2B3F;
+    color: #FFB6C8;
+    font-weight: bold;
+}
+QMenuBar::item:selected { background-color: #5A3F5E; }
+
+/* ── Aufgeklapptes Menü ── */
+QMenu {
+    background-color: #2F2433;
+    color: #F5E6EC;
+    border: 1px solid #5A3F5E;
+    padding: 4px;
+}
+QMenu::item {
+    color: #F5E6EC;
+    padding: 6px 24px 6px 16px;
+    border-radius: 6px;
+}
+QMenu::item:selected {
+    background-color: #5A3F5E;
+    color: #FFFFFF;
+}
+QMenu::item:disabled { color: #8A7A82; }
+QMenu::separator {
+    height: 1px;
+    background-color: #5A3F5E;
+    margin: 4px 8px;
+}
+
+/* ── Textfeld ── */
+QTextEdit {
+    background-color: #2F2433;
+    color: #F5E6EC;
+    border: 2px solid #FFB6C8;
+    border-radius: 12px;
+    margin: 16px;
+    padding: 12px;
+    font-size: 14px;
+}
+
+/* ── Statusleiste unten ── */
+QStatusBar { color: #FFB6C8; font-weight: bold; }

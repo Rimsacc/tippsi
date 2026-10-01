@@ -8,7 +8,9 @@ Diese Datei startet die Anwendung und erstellt das Hauptfenster.
 # ── Imports ──────────────────────────────────────────────
 import sys
 import os  # für Dateinamen (z. B. "brief.html" aus dem vollständigen Pfad)
+from pathlib import Path  # für Dateipfade, z. B. zu den Design-Dateien
 
+from PySide6.QtCore import Qt  # Qt-Grundeinstellungen, z. B. Farbschema
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -17,7 +19,24 @@ from PySide6.QtWidgets import (
     QMessageBox,   # Popup-Meldungen, z. B. bei Fehlern
 )
 # QAction = ein Menüeintrag, QKeySequence = Tastenkürzel wie Strg+S
-from PySide6.QtGui import QAction, QKeySequence
+# QActionGroup = Gruppe von Menüeinträgen, von denen nur einer aktiv sein kann
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence
+
+
+# ── Konstanten ───────────────────────────────────────────
+# Ordner mit den Design-Dateien. __file__ ist der Pfad dieser main.py,
+# .parent ist der Ordner, in dem sie liegt.
+THEMES_DIR = Path(__file__).parent / "themes"
+
+# Verfügbare Designs: Name im Menü -> (QSS-Datei, passendes Qt-Farbschema)
+THEMES = {
+    "Hell": ("light.qss", Qt.ColorScheme.Light),
+    "Dunkel": ("dark.qss", Qt.ColorScheme.Dark),
+}
+
+# Qt-Stil für die Grunddarstellung. "Fusion" sieht auf allen Systemen
+# gleich aus und beachtet Stylesheets vollständig.
+QT_STYLE = "Fusion"
 
 
 # ── Hauptfenster ─────────────────────────────────────────
@@ -49,41 +68,34 @@ class TippsiWindow(QMainWindow):
         self.create_file_menu()
         self.menuBar().addMenu("Bearbeiten")  # wird später ergänzt
         self.menuBar().addMenu("Format")      # wird später ergänzt
+        self.create_view_menu()
 
         # --- Design ---
-        self.apply_style()
+        # Beim Start das Design passend zur Systemeinstellung wählen
+        self.apply_theme(self.system_theme())
 
     # ── Design ───────────────────────────────────────────
-    def apply_style(self):
-        """Setzt das Farbschema der Anwendung per Qt Style Sheet (QSS)."""
-        self.setStyleSheet("""
-            QMainWindow { background-color: #FFE4EC; }
+    def system_theme(self):
+        """Gibt 'Dunkel' zurück, wenn das Betriebssystem im Dark Mode ist, sonst 'Hell'."""
+        if QApplication.styleHints().colorScheme() == Qt.ColorScheme.Dark:
+            return "Dunkel"
+        return "Hell"
 
-            QMenuBar {
-                background-color: #FFB6C8;
-                color: white;
-                font-weight: bold;
-            }
-            QMenuBar::item:selected { background-color: #FF8FAB; }
+    def apply_theme(self, name):
+        """Wechselt das Design der Anwendung.
 
-            QMenu {
-                background-color: #FFFAFC;
-                border: 1px solid #FFB6C8;
-            }
-            QMenu::item:selected { background-color: #FFD1DC; color: #4A4A4A; }
+        name ist ein Schlüssel aus THEMES, z. B. "Hell" oder "Dunkel".
+        """
+        file_name, color_scheme = THEMES[name]
 
-            QTextEdit {
-                background-color: #FFFAFC;
-                color: #4A4A4A;
-                border: 2px solid #FFB6C8;
-                border-radius: 12px;
-                margin: 16px;
-                padding: 12px;
-                font-size: 14px;
-            }
+        # Qt-Farbschema anpassen, damit auch Standardfarben (z. B. Scrollleisten) passen
+        QApplication.styleHints().setColorScheme(color_scheme)
 
-            QStatusBar { color: #FF8FAB; font-weight: bold; }
-        """)
+        # Unser eigenes Design aus der QSS-Datei laden
+        self.setStyleSheet((THEMES_DIR / file_name).read_text(encoding="utf-8"))
+
+        # Häkchen im Menü beim richtigen Eintrag setzen
+        self.theme_actions[name].setChecked(True)
 
     # ── Menüs ────────────────────────────────────────────
     def create_file_menu(self):
@@ -118,6 +130,28 @@ class TippsiWindow(QMainWindow):
         quit_action.setShortcut(QKeySequence.StandardKey.Quit)
         quit_action.triggered.connect(self.close)  # close() stellt Qt bereit
         file_menu.addAction(quit_action)
+
+    def create_view_menu(self):
+        """Erstellt das Ansicht-Menü mit der Auswahl Hell/Dunkel."""
+        view_menu = self.menuBar().addMenu("Ansicht")
+        design_menu = view_menu.addMenu("Design")  # Untermenü
+
+        # In einer QActionGroup kann immer nur ein Eintrag ausgewählt sein
+        theme_group = QActionGroup(self)
+
+        # Die Menüeinträge merken wir uns, um später das Häkchen setzen zu können
+        self.theme_actions = {}
+
+        # Für jedes Design in THEMES einen Menüeintrag erstellen
+        for name in THEMES:
+            action = QAction(name, self)
+            action.setCheckable(True)  # Eintrag kann ein Häkchen bekommen
+            # lambda = kleine Funktion ohne Namen. n=name merkt sich den
+            # aktuellen Namen, sonst würden alle Einträge das letzte Design setzen.
+            action.triggered.connect(lambda checked, n=name: self.apply_theme(n))
+            theme_group.addAction(action)
+            design_menu.addAction(action)
+            self.theme_actions[name] = action
 
     # ── Dateifunktionen ──────────────────────────────────
     def new_file(self):
@@ -215,6 +249,8 @@ class TippsiWindow(QMainWindow):
 # Wird nur ausgeführt, wenn die Datei direkt gestartet wird (python main.py)
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    # Einheitlichen Qt-Stil setzen, bevor Fenster erstellt werden
+    app.setStyle(QT_STYLE)
     window = TippsiWindow()
     window.show()
     sys.exit(app.exec())
