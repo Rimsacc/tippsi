@@ -9,6 +9,7 @@
  *   #FFB6C8  Akzent (Rosa)
  *   #F5E6EC  Text (helles Rosaweiß)
  *   #8A7A82  Text deaktiviert
+ *   #7A6680  Platzhaltertext (gedämpftes Flieder)
  */
 
 QMainWindow { background-color: #241C27; }
@@ -99,6 +100,7 @@ QTextEdit {
     border-radius: 12px;
     margin: 16px;
     padding: 12px;
+    placeholder-text-color: #7A6680;  /* Farbe des Platzhaltertexts */
 }
 
 /* ── Statusleiste unten ── */

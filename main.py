@@ -7,6 +7,7 @@ Diese Datei startet die Anwendung und erstellt das Hauptfenster.
 
 # ── Imports ──────────────────────────────────────────────
 import sys
+import random  # für die zufällige Auswahl des Platzhaltertexts
 from pathlib import Path  # für Dateipfade, z. B. zu den Design-Dateien
 
 from PySide6.QtCore import Qt  # Qt-Grundeinstellungen, z. B. Farbschema
@@ -48,6 +49,13 @@ FILE_FILTER_SAVE = "Tippsi-Dokumente (*.html);;Textdateien (*.txt)"
 # Standard-Schriftgröße im Textfeld (in Punkt, wie in Word)
 DEFAULT_FONT_SIZE = 12
 
+# Datei mit den Platzhaltertexten (eine Zeile = ein Text).
+# Die Texte stehen bewusst nicht im Code, sondern in einer eigenen Datei.
+PLACEHOLDERS_PATH = Path(__file__).parent / "texts" / "placeholders.txt"
+
+# Wird verwendet, falls die Datei fehlt oder leer ist
+DEFAULT_PLACEHOLDER = "Text eingeben ..."
+
 
 # ── Hauptfenster ─────────────────────────────────────────
 class TippsiWindow(QMainWindow):
@@ -73,7 +81,8 @@ class TippsiWindow(QMainWindow):
         # --- Textfeld ---
         # self.editor, damit andere Methoden (z. B. Speichern) darauf zugreifen können
         self.editor = QTextEdit()
-        self.editor.setPlaceholderText("Text eingeben ...")
+        self.placeholders = self.load_placeholders()
+        self.set_random_placeholder()
         self.set_default_font()
         self.setCentralWidget(self.editor)
 
@@ -218,6 +227,7 @@ class TippsiWindow(QMainWindow):
             return
 
         self.editor.clear()
+        self.set_random_placeholder()  # bei jedem neuen Dokument ein anderer Spruch
         self.set_current_file(None)
 
     def open_file(self):
@@ -338,6 +348,21 @@ class TippsiWindow(QMainWindow):
         font = self.editor.font()
         font.setPointSize(DEFAULT_FONT_SIZE)
         self.editor.setFont(font)
+
+    def load_placeholders(self):
+        """Lädt die Platzhaltertexte aus der Datei.
+
+        Falls die Datei fehlt oder leer ist, gibt es einen neutralen Standardtext.
+        """
+        try:
+            placeholders = file_service.read_lines(PLACEHOLDERS_PATH)
+        except OSError:
+            placeholders = []
+        return placeholders or [DEFAULT_PLACEHOLDER]
+
+    def set_random_placeholder(self):
+        """Zeigt einen zufälligen Platzhaltertext im leeren Textfeld an."""
+        self.editor.setPlaceholderText(random.choice(self.placeholders))
 
     def set_current_file(self, path):
         """Merkt sich die aktuelle Datei und markiert das Dokument als gespeichert."""

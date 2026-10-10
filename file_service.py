@@ -35,6 +35,16 @@ def read_file(path):
     return Path(path).read_text(encoding="utf-8")
 
 
+def read_lines(path):
+    """Liest eine Textdatei und gibt alle nicht-leeren Zeilen als Liste zurück.
+
+    Leerzeichen am Anfang und Ende jeder Zeile werden entfernt.
+    Wirft OSError, wenn die Datei nicht gelesen werden kann.
+    """
+    lines = read_file(path).splitlines()
+    return [line.strip() for line in lines if line.strip()]
+
+
 def write_file(path, content):
     """Schreibt Text als UTF-8 in eine Datei.
 
