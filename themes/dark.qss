@@ -3,9 +3,9 @@
  *
  * Farbpalette:
  *   #241C27  Hintergrund (dunkles Aubergine)
- *   #2F2433  Flächen (Textfeld, Menüs)
+ *   #2F2433  Flächen (Textfeld, Menüs, Toolbar)
  *   #3A2B3F  Menüleiste
- *   #5A3F5E  Auswahl und Ränder
+ *   #5A3F5E  Auswahl, Hover und Ränder
  *   #FFB6C8  Akzent (Rosa)
  *   #F5E6EC  Text (helles Rosaweiß)
  *   #8A7A82  Text deaktiviert
@@ -44,6 +44,53 @@ QMenu::separator {
     margin: 4px 8px;
 }
 
+/* ── Toolbar (Formatierung) ── */
+QToolBar {
+    background-color: #2F2433;
+    border: none;
+    border-bottom: 1px solid #5A3F5E;
+    padding: 4px;
+    spacing: 4px;
+}
+QToolBar::separator {
+    background-color: #5A3F5E;
+    width: 1px;
+    margin: 4px 6px;
+}
+QToolButton {
+    color: #F5E6EC;
+    background-color: transparent;
+    border-radius: 6px;
+    padding: 4px 10px;
+}
+QToolButton:hover { background-color: #5A3F5E; }
+QToolButton:checked {
+    background-color: #FFB6C8;
+    color: #241C27;
+}
+
+/* ── Auswahllisten (Schriftart, Schriftgröße) ── */
+QComboBox {
+    background-color: #241C27;
+    color: #F5E6EC;
+    border: 1px solid #5A3F5E;
+    border-radius: 6px;
+    padding: 2px 8px;
+}
+QComboBox QAbstractItemView {
+    background-color: #2F2433;
+    color: #F5E6EC;
+    selection-background-color: #5A3F5E;
+    selection-color: #FFFFFF;
+}
+
+/* ── Tooltips (Hinweis beim Drüberfahren) ── */
+QToolTip {
+    background-color: #2F2433;
+    color: #F5E6EC;
+    border: 1px solid #FFB6C8;
+}
+
 /* ── Textfeld ── */
 QTextEdit {
     background-color: #2F2433;
@@ -52,7 +99,6 @@ QTextEdit {
     border-radius: 12px;
     margin: 16px;
     padding: 12px;
-    font-size: 14px;
 }
 
 /* ── Statusleiste unten ── */

@@ -15,14 +15,15 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QTextEdit,
     QFileDialog,   # Standard-Dialog zum Öffnen und Speichern von Dateien
-    QMessageBox,   # Popup-Meldungen, z. B. bei Fehlern
+    QMessageBox,   # Popup-Meldungen, z. B. bei Fehlern oder Rückfragen
 )
 # QAction = ein Menüeintrag, QKeySequence = Tastenkürzel wie Strg+S
 # QActionGroup = Gruppe von Menüeinträgen, von denen nur einer aktiv sein kann
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence
 
-# Eigenes Modul: Lesen und Schreiben von Dateien
-import file_service
+# Eigene Module
+import file_service                      # Lesen und Schreiben von Dateien
+from format_toolbar import FormatToolbar  # Toolbar für fett, kursiv usw.
 
 
 # ── Konstanten ───────────────────────────────────────────
@@ -44,13 +45,17 @@ QT_STYLE = "Fusion"
 FILE_FILTER_OPEN = "Tippsi-Dokumente (*.html);;Textdateien (*.txt);;Alle Dateien (*)"
 FILE_FILTER_SAVE = "Tippsi-Dokumente (*.html);;Textdateien (*.txt)"
 
+# Standard-Schriftgröße im Textfeld (in Punkt, wie in Word)
+DEFAULT_FONT_SIZE = 12
+
 
 # ── Hauptfenster ─────────────────────────────────────────
 class TippsiWindow(QMainWindow):
     """Das Hauptfenster von Tippsi.
 
     Zuständig für Anzeige und Bedienung. Das Lesen und Schreiben
-    von Dateien übernimmt das Modul file_service.
+    von Dateien übernimmt das Modul file_service, die Formatierung
+    die Klasse FormatToolbar.
     """
 
     def __init__(self):
@@ -69,12 +74,22 @@ class TippsiWindow(QMainWindow):
         # self.editor, damit andere Methoden (z. B. Speichern) darauf zugreifen können
         self.editor = QTextEdit()
         self.editor.setPlaceholderText("Text eingeben ...")
+        self.set_default_font()
         self.setCentralWidget(self.editor)
+
+        # Observer: Sobald sich der Text ändert (oder gespeichert wird),
+        # meldet das Dokument das, und Qt zeigt ein * im Fenstertitel an.
+        self.editor.document().modificationChanged.connect(self.setWindowModified)
+
+        # --- Toolbar ---
+        # Die Toolbar bekommt das Textfeld, damit sie es formatieren kann
+        self.format_toolbar = FormatToolbar(self.editor, self)
+        self.addToolBar(self.format_toolbar)
 
         # --- Menüleiste ---
         self.create_file_menu()
-        self.menuBar().addMenu("Bearbeiten")  # wird später ergänzt
-        self.menuBar().addMenu("Format")      # wird später ergänzt
+        self.create_edit_menu()
+        self.create_format_menu()
         self.create_view_menu()
 
         # --- Design ---
@@ -105,38 +120,73 @@ class TippsiWindow(QMainWindow):
         self.theme_actions[name].setChecked(True)
 
     # ── Menüs ────────────────────────────────────────────
+    def make_action(self, text, shortcut, slot):
+        """Hilfsmethode: erstellt einen Menüeintrag mit Tastenkürzel.
+
+        slot ist die Methode, die beim Klick ausgeführt wird (Signal & Slot).
+        """
+        action = QAction(text, self)
+        action.setShortcut(shortcut)
+        action.triggered.connect(slot)
+        return action
+
     def create_file_menu(self):
         """Erstellt das Datei-Menü mit Neu, Öffnen, Speichern und Beenden."""
         file_menu = self.menuBar().addMenu("Datei")
+        keys = QKeySequence.StandardKey
 
-        # Jeder Menüeintrag ist eine QAction.
-        # triggered.connect(...) verbindet den Klick mit einer Methode (Signal & Slot).
-        new_action = QAction("Neu", self)
-        new_action.setShortcut(QKeySequence.StandardKey.New)
-        new_action.triggered.connect(self.new_file)
-        file_menu.addAction(new_action)
-
-        open_action = QAction("Öffnen ...", self)
-        open_action.setShortcut(QKeySequence.StandardKey.Open)
-        open_action.triggered.connect(self.open_file)
-        file_menu.addAction(open_action)
-
-        save_action = QAction("Speichern", self)
-        save_action.setShortcut(QKeySequence.StandardKey.Save)
-        save_action.triggered.connect(self.save_file)
-        file_menu.addAction(save_action)
-
-        save_as_action = QAction("Speichern unter ...", self)
-        save_as_action.setShortcut(QKeySequence.StandardKey.SaveAs)
-        save_as_action.triggered.connect(self.save_file_as)
-        file_menu.addAction(save_as_action)
-
+        file_menu.addAction(self.make_action("Neu", keys.New, self.new_file))
+        file_menu.addAction(self.make_action("Öffnen ...", keys.Open, self.open_file))
+        file_menu.addAction(self.make_action("Speichern", keys.Save, self.save_file))
+        file_menu.addAction(self.make_action("Speichern unter ...", keys.SaveAs, self.save_file_as))
         file_menu.addSeparator()
+        file_menu.addAction(self.make_action("Beenden", keys.Quit, self.close))
 
-        quit_action = QAction("Beenden", self)
-        quit_action.setShortcut(QKeySequence.StandardKey.Quit)
-        quit_action.triggered.connect(self.close)  # close() stellt Qt bereit
-        file_menu.addAction(quit_action)
+    def create_edit_menu(self):
+        """Erstellt das Bearbeiten-Menü (Rückgängig, Kopieren, Einfügen usw.).
+
+        Die eigentlichen Funktionen bringt QTextEdit schon mit.
+        """
+        edit_menu = self.menuBar().addMenu("Bearbeiten")
+        keys = QKeySequence.StandardKey
+
+        undo_action = self.make_action("Rückgängig", keys.Undo, self.editor.undo)
+        redo_action = self.make_action("Wiederholen", keys.Redo, self.editor.redo)
+        cut_action = self.make_action("Ausschneiden", keys.Cut, self.editor.cut)
+        copy_action = self.make_action("Kopieren", keys.Copy, self.editor.copy)
+        paste_action = self.make_action("Einfügen", keys.Paste, self.editor.paste)
+        select_all_action = self.make_action("Alles auswählen", keys.SelectAll, self.editor.selectAll)
+
+        # Am Anfang gibt es nichts rückgängig zu machen und nichts markiert
+        for action in (undo_action, redo_action, cut_action, copy_action):
+            action.setEnabled(False)
+
+        # Observer: Das Textfeld meldet, wann diese Aktionen möglich sind,
+        # und die Menüeinträge werden automatisch an- oder ausgegraut.
+        self.editor.undoAvailable.connect(undo_action.setEnabled)
+        self.editor.redoAvailable.connect(redo_action.setEnabled)
+        self.editor.copyAvailable.connect(cut_action.setEnabled)
+        self.editor.copyAvailable.connect(copy_action.setEnabled)
+
+        edit_menu.addAction(undo_action)
+        edit_menu.addAction(redo_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(cut_action)
+        edit_menu.addAction(copy_action)
+        edit_menu.addAction(paste_action)
+        edit_menu.addSeparator()
+        edit_menu.addAction(select_all_action)
+
+    def create_format_menu(self):
+        """Erstellt das Format-Menü.
+
+        Verwendet dieselben Aktionen wie die Toolbar. Dadurch sind Menü
+        und Toolbar immer gleich (Häkchen, Tastenkürzel) und nichts ist doppelt.
+        """
+        format_menu = self.menuBar().addMenu("Format")
+        format_menu.addAction(self.format_toolbar.bold_action)
+        format_menu.addAction(self.format_toolbar.italic_action)
+        format_menu.addAction(self.format_toolbar.underline_action)
 
     def create_view_menu(self):
         """Erstellt das Ansicht-Menü mit der Auswahl Hell/Dunkel."""
@@ -163,12 +213,19 @@ class TippsiWindow(QMainWindow):
     # ── Dateifunktionen ──────────────────────────────────
     def new_file(self):
         """Leert das Textfeld und beginnt ein neues, unbenanntes Dokument."""
+        # Vorher fragen, falls es ungespeicherte Änderungen gibt
+        if not self.maybe_save():
+            return
+
         self.editor.clear()
-        self.current_file = None
-        self.update_title()
+        self.set_current_file(None)
 
     def open_file(self):
         """Öffnet eine vom Benutzer gewählte Datei und zeigt sie im Textfeld an."""
+        # Vorher fragen, falls es ungespeicherte Änderungen gibt
+        if not self.maybe_save():
+            return
+
         # Rückgabe: (Pfad, gewählter Filter). Der Filter wird nicht benötigt -> _
         path, _ = QFileDialog.getOpenFileName(self, "Datei öffnen", "", FILE_FILTER_OPEN)
 
@@ -189,28 +246,35 @@ class TippsiWindow(QMainWindow):
         else:
             self.editor.setPlainText(content)
 
-        self.current_file = path
-        self.update_title()
+        self.set_current_file(path)
 
     def save_file(self):
-        """Speichert in die aktuelle Datei oder ruft 'Speichern unter' auf."""
+        """Speichert in die aktuelle Datei oder ruft 'Speichern unter' auf.
+
+        Gibt True zurück, wenn gespeichert wurde, sonst False.
+        """
         if self.current_file is None:
-            self.save_file_as()
-        else:
-            self.write_to_file(self.current_file)
+            return self.save_file_as()
+        return self.write_to_file(self.current_file)
 
     def save_file_as(self):
-        """Fragt nach einem Speicherort und speichert das Dokument dort."""
+        """Fragt nach einem Speicherort und speichert das Dokument dort.
+
+        Gibt True zurück, wenn gespeichert wurde, sonst False (z. B. bei Abbrechen).
+        """
         default_name = "Unbenannt" + file_service.DEFAULT_EXTENSION
         path, _ = QFileDialog.getSaveFileName(self, "Speichern unter", default_name, FILE_FILTER_SAVE)
         if not path:
-            return
+            return False
 
         # Ohne Dateiendung wird die Standardendung (.html) angehängt
-        self.write_to_file(file_service.ensure_extension(path))
+        return self.write_to_file(file_service.ensure_extension(path))
 
     def write_to_file(self, path):
-        """Holt den Inhalt aus dem Textfeld und lässt ihn von file_service speichern."""
+        """Holt den Inhalt aus dem Textfeld und lässt ihn von file_service speichern.
+
+        Gibt True zurück, wenn das Speichern geklappt hat, sonst False.
+        """
         # .html speichert mit Formatierung, .txt nur den reinen Text
         if file_service.is_html(path):
             content = self.editor.toHtml()
@@ -221,14 +285,69 @@ class TippsiWindow(QMainWindow):
             file_service.write_file(path, content)
         except OSError as error:
             self.show_error("Die Datei konnte nicht gespeichert werden.", error)
-            return
+            return False
 
-        self.current_file = path
-        self.update_title()
+        self.set_current_file(path)
         # Hinweis in der Statusleiste, verschwindet nach 3 Sekunden
         self.statusBar().showMessage("Gespeichert", 3000)
+        return True
+
+    # ── Ungespeicherte Änderungen ────────────────────────
+    def maybe_save(self):
+        """Fragt nach, ob ungespeicherte Änderungen gespeichert werden sollen.
+
+        Gibt True zurück, wenn weitergemacht werden darf (gespeichert oder
+        verworfen), und False, wenn der Benutzer abbricht.
+        """
+        # Keine Änderungen -> nichts zu fragen
+        if not self.editor.document().isModified():
+            return True
+
+        box = QMessageBox(self)
+        box.setWindowTitle("Ungespeicherte Änderungen")
+        box.setText("Das Dokument wurde geändert.\nMöchtest du die Änderungen speichern?")
+        box.setIcon(QMessageBox.Icon.Warning)
+        # Eigene Buttons mit deutschem Text (Standard-Buttons wären englisch)
+        save_button = box.addButton("Speichern", QMessageBox.ButtonRole.AcceptRole)
+        discard_button = box.addButton("Nicht speichern", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton("Abbrechen", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(save_button)
+        box.exec()  # Dialog anzeigen und warten, bis ein Button geklickt wurde
+
+        clicked = box.clickedButton()
+        if clicked == save_button:
+            # Nur weitermachen, wenn das Speichern auch wirklich geklappt hat
+            return self.save_file()
+        if clicked == discard_button:
+            return True
+        return False  # Abbrechen oder Fenster mit X geschlossen
+
+    def closeEvent(self, event):
+        """Wird von Qt automatisch aufgerufen, wenn das Fenster geschlossen wird.
+
+        Überschreibt die Methode von QMainWindow, damit vorher nachgefragt wird.
+        """
+        if self.maybe_save():
+            event.accept()  # Fenster darf schließen
+        else:
+            event.ignore()  # Schließen abbrechen
 
     # ── Hilfsmethoden ────────────────────────────────────
+    def set_default_font(self):
+        """Setzt die Standard-Schriftgröße des Textfelds."""
+        font = self.editor.font()
+        font.setPointSize(DEFAULT_FONT_SIZE)
+        self.editor.setFont(font)
+
+    def set_current_file(self, path):
+        """Merkt sich die aktuelle Datei und markiert das Dokument als gespeichert."""
+        self.current_file = path
+        self.editor.document().setModified(False)
+        # Zusätzlich direkt setzen: Nach clear() oder setHtml() meldet Qt
+        # die Änderung nicht immer zuverlässig über das Signal.
+        self.setWindowModified(False)
+        self.update_title()
+
     def update_title(self):
         """Zeigt den Namen der aktuellen Datei in der Titelleiste an."""
         if self.current_file:
@@ -236,7 +355,9 @@ class TippsiWindow(QMainWindow):
             name = Path(self.current_file).name
         else:
             name = "Unbenannt"
-        self.setWindowTitle(f"{name} - Tippsi")
+        # [*] ist ein Platzhalter von Qt: Dort erscheint ein *, solange
+        # es ungespeicherte Änderungen gibt (siehe setWindowModified).
+        self.setWindowTitle(f"{name}[*] - Tippsi")
 
     def show_error(self, message, error):
         """Zeigt eine Fehlermeldung als Popup an."""
